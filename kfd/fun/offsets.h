@@ -99,4 +99,7 @@ extern uint64_t off_gphysize;
 extern uint64_t off_gvirtbase;
 extern uint64_t off_ptov__table;
 
+
+extern uint64_t off_p_flag;
+
 void _offsets_init(void);

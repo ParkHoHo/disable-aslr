@@ -1,3 +1,73 @@
+# Disable aslr code
+In xnu, changing the p_flag of the parent process to the P_DISABLE_ASLR value disables aslr.
+```
+/*
+     * Disable ASLR during image activation.  This occurs either if the
+     * _POSIX_SPAWN_DISABLE_ASLR attribute was found above or if
+     * P_DISABLE_ASLR was inherited from the parent process.
+     */
+    if (p->p_flag & P_DISABLE_ASLR) {
+        imgp->ip_flags |= IMGPF_DISABLE_ASLR;
+    }
+```
+
+## Environments
+- iOS 16.6.1 
+- iphone 8 GSM 
+
+## How to works?
+kfd and kfund help us kernel read/write. <br>
+So, we can write process flag in kernel. 
+
+### But how?
+Before i commented `changing the p_flag of the parent process to the P_DISABLE_ASLR value disables aslr.` <br>
+First, Get 'launchd' process address. <br>
+Second, Calculate where is the offset of p_flag.
+Third, write in off_p_flag to p_flag | 0x00001000.
+
+This is all about disable aslr.
+
+## Changed
+
+So, i add code in kfund project like this.
+Follows are my code.
+
+offset.m
+
+```
+off_p_flag = 0x454;
+```
+
+```
+uint64_t off_p_flag = 0;
+```
+
+offsets.h
+```
+extern uint64_t off_p_flag;
+```
+
+fun.m
+```
+/// Write by hoho
+    uint64_t firstProc = getPidByName("launchd");
+    uint64_t proc = getProc(firstProc);
+    
+    
+    uint32_t p_flag =  kread32(proc+off_p_flag);
+    printf("[+] child proc-> p_flag :0x%x\n",p_flag);
+    
+    kwrite32(proc+off_p_flag, p_flag | 0x00001000);
+    
+    printf("[+] child proc-> p_flag :0x%x\n",p_flag);
+    
+    printf("End disable aslr");
+
+```
+
+## Result
+<img src="/figure/result.png">
+
 # kfund (Post-Exploitation)
 kfund, short for my [fun](kfd/fun) with kfd exploit.
 

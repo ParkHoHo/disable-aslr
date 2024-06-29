@@ -24,6 +24,7 @@ uint32_t off_p_sessionid = 0;
 uint32_t off_p_puniqueid = 0;
 uint32_t off_p_pid = 0;
 uint32_t off_p_pfd = 0;
+uint64_t off_p_flag = 0;
 uint32_t off_p_textvp = 0;
 uint32_t off_p_name = 0;
 uint32_t off_p_ro_p_csflags = 0;
@@ -309,6 +310,7 @@ void _offsets_init(void) {
         //changed start
         off_p_textvp = 0x548;//0x350;   //_csproc_get_blob
         off_p_name = 0x579;//0x381; //_proc_best_name
+        off_p_flag = 0x454;
         
         //https://github.com/apple-oss-distributions/xnu/blob/xnu-8792.41.9/bsd/sys/namei.h#L243
         //added two fields (so calulate + 8)

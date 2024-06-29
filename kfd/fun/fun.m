@@ -299,11 +299,25 @@ int do_fun(void) {
     funCSFlags("launchd");
     funTask("kfd");
     
-    uint64_t orig_nc_vp = 0;
-    uint64_t orig_to_vnode = 0;
-    funVnodeRedirectFile("/sbin/launchd", "/System/Library/Audio/UISounds/photoShutter.caf", &orig_to_vnode, &orig_nc_vp);
-    funVnodeUnRedirectFile(orig_to_vnode, orig_nc_vp);
+    /// Write by hoho
+    uint64_t firstProc = getPidByName("launchd");
+    uint64_t proc = getProc(firstProc);
     
+    
+    uint32_t p_flag =  kread32(proc+off_p_flag);
+    printf("[+] child proc-> p_flag :0x%x\n",p_flag);
+    
+    kwrite32(proc+off_p_flag, p_flag | 0x00001000);
+    
+    printf("[+] child proc-> p_flag :0x%x\n",p_flag);
+    
+    printf("End disable aslr");
+    
+//    uint64_t orig_nc_vp = 0;
+//    uint64_t orig_to_vnode = 0;
+//    funVnodeRedirectFile("/sbin/launchd", "/System/Library/Audio/UISounds/photoShutter.caf", &orig_to_vnode, &orig_nc_vp);
+//    funVnodeUnRedirectFile(orig_to_vnode, orig_nc_vp);
+//    
 //    fun_proc_dump_entitlements(getProcByName("tccd"));
 //    fun_vnode_dump_entitlements("/System/Library/CoreServices/ReportCrash");
 //    fun_nvram_dump();
