@@ -22,7 +22,7 @@ So, we can write process flag in kernel.
 ### But how?
 Before i commented `changing the p_flag of the parent process to the P_DISABLE_ASLR value disables aslr.` <br>
 First, Get 'launchd' process address. <br>
-Second, Calculate where is the offset of p_flag.
+Second, Calculate where is the offset of p_flag.<br>
 Third, write in off_p_flag to p_flag | 0x00001000.
 
 This is all about disable aslr.
