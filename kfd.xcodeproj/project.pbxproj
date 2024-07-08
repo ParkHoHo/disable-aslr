@@ -27,6 +27,7 @@
 		6E9204A22B330FAB001D38E5 /* proc.c in Sources */ = {isa = PBXBuildFile; fileRef = 6E9204932B330FAB001D38E5 /* proc.c */; };
 		6ED3B82B2B4F551F008251E5 /* libdimentio.m in Sources */ = {isa = PBXBuildFile; fileRef = 6ED3B82A2B4F551F008251E5 /* libdimentio.m */; };
 		6EE050F82B4B17EF0016D92F /* GPU_CoreSight.m in Sources */ = {isa = PBXBuildFile; fileRef = 6EE050F72B4B17EF0016D92F /* GPU_CoreSight.m */; };
+		DD7D0FD12C3A88A000CF7113 /* PUAF.md in Resources */ = {isa = PBXBuildFile; fileRef = DD7D0FD02C3A85E300CF7113 /* PUAF.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -86,6 +87,9 @@
 		6ED3B82A2B4F551F008251E5 /* libdimentio.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = libdimentio.m; sourceTree = "<group>"; };
 		6EE050F72B4B17EF0016D92F /* GPU_CoreSight.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GPU_CoreSight.m; sourceTree = "<group>"; };
 		6EE050F92B4B17FD0016D92F /* GPU_CoreSight.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GPU_CoreSight.h; sourceTree = "<group>"; };
+		DD7D0FD02C3A85E300CF7113 /* PUAF.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PUAF.md; sourceTree = "<group>"; };
+		DD7D10092C3BC81400CF7113 /* PhysPuppet.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PhysPuppet.md; sourceTree = "<group>"; };
+		DD7D100A2C3C178600CF7113 /* Smith.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Smith.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -181,6 +185,7 @@
 		297BA1072A310AE100D1E51A /* kfd */ = {
 			isa = PBXGroup;
 			children = (
+				DD7D100B2C3C178E00CF7113 /* writeup(Ver.ko) */,
 				6E011ABC2B4C13330020F821 /* Info.plist */,
 				6E9204812B330FAB001D38E5 /* fun */,
 				297BA10C2A310AE200D1E51A /* Assets.xcassets */,
@@ -274,6 +279,16 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		DD7D100B2C3C178E00CF7113 /* writeup(Ver.ko) */ = {
+			isa = PBXGroup;
+			children = (
+				DD7D10092C3BC81400CF7113 /* PhysPuppet.md */,
+				DD7D0FD02C3A85E300CF7113 /* PUAF.md */,
+				DD7D100A2C3C178600CF7113 /* Smith.md */,
+			);
+			path = "writeup(Ver.ko)";
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -333,6 +348,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DD7D0FD12C3A88A000CF7113 /* PUAF.md in Resources */,
 				297BA1112A310AE200D1E51A /* Preview Assets.xcassets in Resources */,
 				297BA10D2A310AE200D1E51A /* Assets.xcassets in Resources */,
 			);
