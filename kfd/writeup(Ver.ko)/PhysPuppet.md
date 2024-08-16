@@ -103,6 +103,8 @@ mach_memory_object_memory_entry_64(
 }
 ```
 
+![physpuppet-figure1.png](/writeups/figures/physpuppet-figure1.png)
+
 ### STEP 2:
 이 단계에서는 1단계에서 생성된 이름 있는 엔트리를 매핑하기 위해 vm_map() 루틴을 호출합니다. 그러나 인수는 특이한 엣지 케이스를 유발하도록 조작되어, 비정렬된 크기 1P + 1로 vm_map_enter()를 호출하게 됩니다. 이는 무작위 주소 A에 새로운 VME(vme2)를 생성하고 삽입하지만, 끝 주소는 A + 1P + 1입니다. 여기 vm_map_enter_mem_object_helper()가 따라가는 상세한 코드 경로가 있습니다:
 ```
@@ -330,9 +332,12 @@ vm_map_enter_mem_object_helper(
 }
 ```
 
+![physpuppet-figure2.png](/writeups/figures/physpuppet-figure2.png)
+
 ### STEP 3:
 단계 2 이후, 우리 VM 맵에 비정렬된 VME(vme2)가 연결되어 있습니다. 단계 3에서는 vme2가 커버하는 두 페이지에 단순히 장애를 일으킵니다. 주소 A + 1P + PAGE_MASK에서 장애가 발생하더라도, vm_fault_internal()은 장애 주소를 A + 1P로 자르기 때문에 vm_map_lookup_and_lock_object()에서 수행하는 조회는 여전히 vme2를 성공적으로 반환합니다. 실제로 조회 루틴은 최종적으로 vm_map_store_lookup_entry_rb()에 도달하게 됩니다. A + 1P는 vme2->vme_start(A)보다 크거나 같고 vme2->vme_end(A + 1P + 1)보다 엄격히 작기 때문에, vme2를 vm_entry out 매개변수로 반환하며 TRUE를 반환합니다. VME_OFFSET(vme2)는 1P와 같으므로, 첫 번째 장애 시 vm_map_lookup_and_lock_object()의 오프셋 out 매개변수는 1P가 되고, 두 번째 장애 시 2P가 됩니다. 다음으로 vm_fault_internal()은 vm_page_lookup()을 호출하며, 이는 vmo1에서 해당 페이지를 찾는 데 실패합니다. 따라서 페이지를 free_list 에서 가져와서 0으로 채워야 합니다. 첫 번째 장애 시, vmp1은 vmo1에 1P 오프셋으로 삽입되며, VM_PAGE_GET_PHYS_PAGE(vmp1)는 읽기 및 쓰기 권한과 함께 가상 주소 A의 PTE에 삽입됩니다. 두 번째 장애 시, vmp2는 vmo1에 2P 오프셋으로 삽입되며, VM_PAGE_GET_PHYS_PAGE(vmp2)는 다시 읽기 및 쓰기 권한과 함께 가상 주소 A + 1P의 PTE에 삽입됩니다.
 
+![physpuppet-figure3.png](/writeups/figures/physpuppet-figure3.png)
 
 ### STEP 4:
 이 단계에서는 vm_deallocate()를 호출하여 vme2가 커버하는 가상 주소 범위를 해제합니다. 이는 vm_map_delete()에 의해 수행됩니다. 아래는 그 함수의 상세 코드 경로입니다:
@@ -595,8 +600,12 @@ done:
 
 제 4단계 이후의 관련 커널 상태는 다음과 같습니다:
 
+![physpuppet-figure4.png](/writeups/figures/physpuppet-figure4.png)
+
 ### STEP 5:
 이 단계에서는 step 1에서 반환된 포트, 즉 vmne1에 대한 할당을 해제하기 위해 mach_port_deallocate()를 호출합니다. 이로 인해 명명된 엔트리와 관련된 모든 구조체들이 해제됩니다. 그러나 이 엔트리는 vmo1에 대한 마지막 참조를 가지고 있었기 때문에, 이는 vm_object_reap()을 발생시킵니다. 이 함수는 vmp1과 vmp2를 모두 pmap_disconnect()를 호출하지 않고 자유 리스트에 다시 넣습니다. 그러나 여전히 vmp2에 의해 참조되는 물리 페이지에 대한 덩어리 PTE가 남아 있습니다. 이 단계 이후의 관련 커널 상태는 다음과 같습니다:
+
+![physpuppet-figure5.png](/writeups/figures/physpuppet-figure5.png)
 
 ### STEP 6:
 해당 단계에서는 vm_allocate()를 호출하여 원래 PTE들의 VA 범위를 커버하는 또 다른 VME (vme3)을 생성합니다. 그러나 vme3를 삭제할 때 vm_map_delete()에 표시된 스니펫에서 볼 수 있듯이, VME_OBJECT(vme3)을 null이 아닌 값으로 초기화하는 것이 중요합니다. 이렇게 하지 않으면 vme3이 삭제될 때 pmap_remove_options()가 호출되지 않습니다. 이는 vme3의 첫 번째 페이지를 faulting in하여 쉽게 달성할 수 있습니다. 이는 새로운 객체(vmo2)를 할당하고, 새로운 제로로 채워진 페이지(vmp3)를 채워 넣고, 이 페이지의 물리 주소를 가상 주소 A에 대한 PTE에 입력함으로써 수행됩니다. 물론 우리는 매달리는 PTE를 덮어 쓸 두 번째 페이지를 faulting in하고 싶지 않습니다.
@@ -604,6 +613,8 @@ done:
 다음은 단계 6 이후의 관련 커널 상태에 대한 그림입니다:
 
 그리고 완성했습니다! 이제 우리는 하나의 물리 페이지에서 안정적인 PUAF(primitive use-after-free) 기법을 가지고 있습니다. 이제 필요한 만큼 이 전체 절차를 반복하여 임의의 수의 PUAF 페이지를 얻을 수 있습니다.
+
+![physpuppet-figure6.png](/writeups/figures/physpuppet-figure6.png)
 
 ## Part B: From PUAF to KRKW
 이 부분은 모든 PUAF 공격에서 공유되는 부분이므로 PUAF 공격에 대한 자세한 내용은 해당 글을 확인해주세요.
