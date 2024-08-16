@@ -106,11 +106,11 @@ macOS에서는 사용자 프로세스가 매핑할 수 있는 최대 VA(즉, cur
 
 커널 메모리를 쓰기 위해 이제 공유 페이지에 `perfmon_config`, `perfmon_source`, `perfmon_event` 구조체를 작성한 다음, 아래 이미지에 표시된 것처럼 `PERFMON_CTL_ADD_EVENT` ioctl을 사용하여 임의의 커널 주소에 8바이트를 쓸 수 있습니다. 그러나 이 시점에서 `kwrite()`는 8의 배수인 모든 크기를 받아들일 수 있습니다. 이 메서드는 루프에서 이 기술을 수행할 것입니다.
 
-![exploiting-puafs-figure1.png](writeups/figures/exploiting-puafs-figure1.png)
+![exploiting-puafs-figure1.png](/writeups/figures/exploiting-puafs-figure1.png)
 
 마지막으로, `kclose()` 함수에서는 `perf_free()` 함수가 `si_rdev`와 `si_opencount` 필드를 원래 값으로 복원하여 파일 디스크립터가 닫힐 때 모든 관련 커널 객체가 제대로 정리됩니다. 그러나 만약 프로세스가 `kclose()`를 호출하기 전에 종료된다면, 이 정리 작업은 불완전할 수 있으며, 다음에 `/dev/aes_0`을 다시 `O_RDWR`로 열려고 하면 EMFILE 오류가 발생할 수 있습니다. 그러므로 프로세스가 언제든지 종료될 수 있고 여전히 커널이 깨끗한 상태로 남아 있도록, 파일 디스크립터의 장치별 커널 객체들을 수동으로 닫기 위해 커널 쓰기 원시 상태를 사용하는 것이 더 좋을 것입니다. 현재 이 부분은 독자들에게 연습 과제로 남겨져 있습니다.
 
-![exploiting-puafs-figure2.png](writeups/figures/exploiting-puafs-figure2.png)
+![exploiting-puafs-figure2.png](/writeups/figures/exploiting-puafs-figure2.png)
 
 ## Impact of XNU mitigations on PUAF exploits
 
