@@ -34,7 +34,7 @@ void physpuppet_run(struct kfd* kfd)
         //MARK: - STEP 2: vm_named_entry를 새로운 vm_map에 매핑
         /*
          * vme_start는 vm_map_entry에서 정렬되지만,
-         * vme_end의 경우에는 vme_start + 1 page + 1byte로 정렬되지 않는다.(A + 1byte)
+         * vme_end의 경우에는 vme_start + 1 page + 1byte로,정렬되지 않는다.(A + 1byte)
          * 매핑된 vm_map_entry는 vme_object가 기존의 vm_named_entry를 공유하고 있기 때문에
          * 총 두번의 ref_count가 발생한다.
          * 결론적으로 새로운 vm_map_entry의 vme_offset은 하나다.
@@ -64,7 +64,7 @@ void physpuppet_run(struct kfd* kfd)
         //MARK: - STEP 5: 모든 vm_named_entry 구조체 해제
         /*
          * vmo1에서 vm_object_reap()을 발생시킴
-         * vmp1과 vmp2는 pmap_disconnect()를 호출하지 않고 자유리스트에 다시 넣음.
+         * vmp1과 vmp2는 pmap_disconnect()를 호출하지 않고 free-list에 다시 넣음.
          * 아직도 PTE에 데이터가 남아있음.
          */
         assert_mach(mach_port_deallocate(mach_task_self(), named_entry));

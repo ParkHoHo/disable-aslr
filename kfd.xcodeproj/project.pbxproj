@@ -87,6 +87,7 @@
 		6ED3B82A2B4F551F008251E5 /* libdimentio.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = libdimentio.m; sourceTree = "<group>"; };
 		6EE050F72B4B17EF0016D92F /* GPU_CoreSight.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GPU_CoreSight.m; sourceTree = "<group>"; };
 		6EE050F92B4B17FD0016D92F /* GPU_CoreSight.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GPU_CoreSight.h; sourceTree = "<group>"; };
+		DD7B8CCE2C5CFC0A00A89117 /* landa.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = landa.md; sourceTree = "<group>"; };
 		DD7D0FD02C3A85E300CF7113 /* PUAF.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PUAF.md; sourceTree = "<group>"; };
 		DD7D10092C3BC81400CF7113 /* PhysPuppet.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PhysPuppet.md; sourceTree = "<group>"; };
 		DD7D100A2C3C178600CF7113 /* Smith.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Smith.md; sourceTree = "<group>"; };
@@ -285,6 +286,7 @@
 				DD7D10092C3BC81400CF7113 /* PhysPuppet.md */,
 				DD7D0FD02C3A85E300CF7113 /* PUAF.md */,
 				DD7D100A2C3C178600CF7113 /* Smith.md */,
+				DD7B8CCE2C5CFC0A00A89117 /* landa.md */,
 			);
 			path = "writeup(Ver.ko)";
 			sourceTree = "<group>";
