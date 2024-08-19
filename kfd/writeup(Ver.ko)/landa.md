@@ -26,7 +26,7 @@ macOS 13.4 및 13.4.1(MacBook Air M2 2022)
 
 모든 소스 VME는 VM_FLAGS_PURGABLE 플래그를 사용하여 복사_전략이 MEMORY_OBJECT_COPY_NONE인 퍼지 가능 오브젝트로 초기화됩니다. 또한 전체 소스 범위는 memset()으로 결함이 있습니다. 다음은 하위 단계 1A 이후의 관련 커널 상태의 그림입니다:
 
-![landa-figure1.png](/figures/landa-figure1.png)
+![landa-figure1.png](/writeups/figures/landa-figure1.png)
 
 하위 단계 1B에서는 2단계에서 마지막 페이지를 제외한 복사본의 대상 범위로 사용될 임의의 주소 B에 (X+3)페이지의 메모리 영역을 vm_allocate()합니다. 그런 다음 해당 메모리 영역을 아래 목록에 오름차순으로 설명된 네 개의 개별 VME로 분할합니다:
 
@@ -40,14 +40,14 @@ macOS 13.4 및 13.4.1(MacBook Air M2 2022)
 
 다시 한 번, 모든 대상 VME는 VM_FLAGS_PURGABLE 플래그를 사용하여 복사 전략이 MEMORY_OBJECT_COPY_NONE인 퍼지 가능한 오브젝트로 초기화된다는 점에 유의하십시오. 또한 dst_vme_4의 읽기 전용 페이지를 제외한 전체 대상 범위가 memset()으로 오류를 일으킵니다. 다음은 하위 단계 1B 이후의 관련 커널 상태를 보여주는 그림입니다:
 
-![landa-figure2.png](/figures/landa-figure2.png)
+![landa-figure2.png](/writeups//figures/landa-figure2.png)
 
 ### STEP 2:
 본격적으로 경쟁 조건을 트리거하기 전에 먼저 다른 스레드를 생성하여 landa_helper_spinner_pthread() 함수를 실행하여 주소 B(즉, dst_vme_1에서 dst_vme_3)에서 시작하는 (X+2) 페이지를 바쁜 루프로 배선하려고 시도합니다. 그러나 dst_vme_1->user_wired_count가 이미 MAX_WIRE_COUNT로 설정되어 있으므로 mlock()은 기본적으로 아무 작업도 하지 않고 ENOMEM만 반환합니다. 다음으로 메인 스레드에서 vm_copy()를 호출하여 주소 A에서 주소 B로 (X+2) 페이지를 복사하여 경쟁 조건을 악용합니다.
 
 하위 단계 2A에서는 vm_copy()의 vm_map_copyin() 부분을 고려합니다. 소스 범위는 전적으로 퍼지 가능한 메모리로 구성되어 있으므로 쓰기 시 복사 최적화가 적용되지 않습니다. 대신, 3개의 소스 VMO인 src_vmo_1에서 src_vmo_3까지 각각 복사된 페이지(X+2)를 보유하기 위해 3개의 새로운 VMO인 copy_vmo_1부터 copy_vmo_3까지가 할당됩니다. 이 작업은 vm_map_copyin_internal()에서 vm_object_copy_strategically()를 세 번 호출하는 동안 이루어집니다. 마지막으로, vm_map_copyin()이 반환되면 출력 VMC에는 복사_vme_1에서 복사_vme_3까지 3개의 임시 VME가 포함되며, 각 임시 VME는 해당 시점에 복사_vmo_1에서 복사_vmo_3에 대한 유일한 참조를 각각 소유하고 있습니다. 다음은 하위 단계 2A 이후의 관련 커널 상태를 보여주는 그림입니다:
 
-![landa-figure3.png](/figures/landa-figure3.png)
+![landa-figure3.png](/writeups//figures/landa-figure3.png)
 
 하위 단계 2B에서는 스피너 스레드에서 mlock()이 더 이상 ENOMEM에 멈추지 않는 지점까지 vm_copy()의 vm_map_copy_overwrite() 부분을 고려합니다. 첫째, 복사본은 완전히 페이지 정렬되므로 vm_map_copy_overwrite()는 VMC를 “헤드” 또는 “테일”로 분할하지 않으며, vm_map_copy_overwrite_nested()를 한 번만 호출합니다. P0 이슈 2361과 마찬가지로 이 함수는 모든 대상 VME를 덮어쓸 수 있는지 확인하며, 여기에는 VME가 “전환 중”으로 표시되지 않았는지 확인하는 것도 포함됩니다. 이 시점에서 mlock()은 여전히 dst_vme_1->user_wired_count가 MAX_WIRE_COUNT와 같기 때문에 대상 범위(즉, dst_vme_1에서 dst_vme_3)가 전환 중이 아닌 것이 보장됩니다. 따라서 vm_map_copy_overwrite_nested()가 진행되며 맵 잠금을 유지한 상태에서 vm_map_copy_overwrite_aligned()를 호출합니다. vm_map_copy_overwrite_aligned()에서 최상위 수준의 동안 루프가 세 번 반복됩니다:
 
@@ -221,7 +221,7 @@ slow_copy:
 
 간단히 말해, dst_vmo_2에서 임시 참조를 취한 다음 vm_fault_copy()를 호출하기 전에 맵 잠금을 해제하여 copy_vmo_2에서 dst_vmo_2로 페이지의 물리적 복사를 수행합니다. 맵 잠금이 해제된 후 어떤 일이 발생하는지 알아보기 전에 하위 단계 2B 이후의 관련 커널 상태를 그림으로 보여드리겠습니다:
 
-![landa-figure4.png](/figures/landa-figure4.png)
+![landa-figure4.png](/writeups//figures/landa-figure4.png)
 
 위 코드 조각의 주석에서 언급했듯이, 스피너 스레드는 항상 맵 잠금을 가져온 다음 vm_fault_copy()가 반환될 때 vm_map_copy_overwrite_aligned()가 이를 되찾아야 합니다. 따라서 이제 스피너 스레드로 관심을 옮겨 보겠습니다. 여기서 mlock()은 vm_map_wire_kernel()을 호출하고, 이 함수는 다시 vm_map_wire_nested()를 호출합니다. 이 함수는 맵 잠금을 가져와 주소 B를 조회하여 dst_vme_1을 반환합니다. 그런 다음 vm_map_wire_nested()에서 최상위 수준의 동안 루프가 dst_vme_1, dst_vme_2 및 dst_vme_3에 대해 각각 하나씩 세 번 반복됩니다.
 
@@ -232,7 +232,7 @@ slow_copy:
 
 세 번째 반복 중에 항목은 dst_vmo_3에 대한 참조가 있는 dst_vme_3으로 설정됩니다. 첫 번째 반복과 달리 dst_vmo_3의 복사 전략은 MEMORY_OBJECT_COPY_NONE이므로 섀도 생성이 시도되지 않습니다. 다음으로 vm_map_wire_nested()는 add_wire_counts()를 호출하여 dst_vme_3->wired_count와 dst_vme_3->user_wired_count를 모두 1로 늘립니다. 그런 다음 dst_vme_3->in_transition이 TRUE로 설정되고 맵이 잠금 해제되며 vm_fault_wire()를 호출하여 dst_vmo_3의 X 페이지를 배선합니다. 결정적으로, vm_fault_wire()는 dst_vme_3의 얕은 비트 단위 복사본을 수신하므로 나중에 맵이 잠금 해제된 상태에서 VME_OBJECT(dst_vme_3)가 수정되더라도 항상 dst_vmo_3을 가리키게 됩니다. 기술적으로 dst_vme_3은 “전환 중”으로 표시되어 있으므로 절대 이런 일이 발생해서는 안 되지만, 바로 이것이 우리의 경쟁 조건이 악용하는 부분입니다. 이 시점에서 vm_fault_wire()는 dst_vmo_3의 각 X 페이지에 대해 vm_fault_wire_fast()를 호출합니다. 그러나 이번에는 vm_fault_wire()가 dst_vmo_3의 모든 X 페이지 배선을 완료하기 전에 vm_fault_copy()가 dst_vmo_2의 단일 페이지 복사를 물리적으로 완료하여 vm_map_copy_overwrite_aligned()가 여기서 맵 잠금을 되찾을 것으로 예상합니다. 이 레이스의 가능한 결과에 대해서는 2단계 마지막에 설명할 예정이지만, 먼저 이런 상황이 발생한다고 가정해 보겠습니다. 계속 진행하기 전에 2C 하위 단계 이후의 관련 커널 상태를 그림으로 보여드리겠습니다:
 
-![landa-figure5.png](/figures/landa-figure5.png)
+![landa-figure5.png](/writeups//figures/landa-figure5.png)
 
 메인 스레드로 돌아가면 위의 코드 조각에서 볼 수 있듯이 vm_fault_copy()가 반환된 후 느린 경로에 대해 dst_vmo_2의 추가 참조가 해제된 다음 copy_vme_2와 copy_vmo_2가 할당 해제되고 마지막으로 맵 잠금이 다시 취해집니다. 맵 타임스탬프가 변경되었으므로 조회가 수행되어 dst_vme_3이 반환되고, vm_map_copy_overwrite_aligned()의 세 번째이자 마지막 반복인 동안 루프로 이동합니다. 이번에는 dst_vme_3과 dst_vm_o_3이 빠른 경로를 취하기 위한 모든 조건을 충족합니다. 아래 코드 조각은 세 번째 반복 중에 빠른 경로 분기 내부에서 어떤 일이 일어나는지 보여줍니다:
 
@@ -298,7 +298,7 @@ slow_copy:
 
 한편, 스피너 스레드로 돌아가면 vm_fault_wire()는 계속해서 dst_vmo_3의 X 페이지를 와이어링하여 읽기 및 쓰기 권한이 모두 있는 해당 페이지의 물리적 주소로 dst_vme_3의 VA 범위 내 PTE에 다시 입력합니다. 그 후 vm_map_wire_nested()가 완료되고 mlock()이 0을 반환합니다. 다음은 2단계의 마지막 하위 단계인 하위 단계 2D 이후의 관련 커널 상태를 보여주는 그림입니다:
 
-![landa-figure6.png](/figures/landa-figure6.png)
+![landa-figure6.png](/writeups//figures/landa-figure6.png)
 
 약속한 대로 이제 다양한 경합 조건의 가능한 결과에 대해 설명하겠습니다. 두 번째 반복 중에 vm_map_copy_overwrite_aligned()가 vm_fault_copy()를 호출하기 전에 맵 잠금을 해제하는 시점까지는 익스플로잇이 완전히 결정론적이라는 점에 유의하시기 바랍니다. 이제 세 가지 시나리오를 고려해 보겠습니다:
 
