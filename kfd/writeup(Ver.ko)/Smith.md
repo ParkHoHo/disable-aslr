@@ -869,4 +869,101 @@ smith_run()의 1단계에서 5개의 VME를 할당할 수 있을 만큼 큰 마�
 
 더 이상 고민하지 않고, 여기 VM 맵과의 상호 작용에 관한 PUAF 악용에 대한 자세한 설명이 있습니다. 모든 라인 번호는 xnu-8792.81.2의 vm_map.c에서 가져온 것입니다.
 
+1. 하위 단계 2A에서 vm_copy()는 vm_map_copyin()을 호출하고, vm_map_copyin_common()은 마지막으로 vm_map_copyin_internal()을 호출하여 다음을 수행합니다:
 
+- 11733줄의 vm_map_lock().
+- 11740줄의 주소 C에 대한 vm_map_lookup_entry()를 호출하여 vme2를 반환하도록 보장합니다.
+- 11878줄의 vm_map_clip_end(). 이 클립은 vme2를 [C:D)]에서 [C:0)]으로 업데이트하고 [0:D)]로 vme2a를 할당하여 VM 맵에 삽입합니다. 다행히 vme2a->vme_start가 0이기 때문에 vm_map_store_entry_link_rb()는 RB_INSERT() 매크로에서 rb_node_compare()가 항상 -1을 반환하도록 보장하여 VMSEL: INSERT FAILED 패닉을 트리거하지 않도록 보장합니다. 따라서 리밸런싱 발생 여부에 관계없이 vme2a는 항상 빨간색-검정색 트리의 가장 왼쪽 노드로 삽입됩니다.
+- 11848줄의 vm_map_unlock().
+
+2. 하위 단계 2B에서 vm_-protect()는 다음을 수행하는 vm_map_protect()를 호출합니다:
+
+- 5883줄의 vm_map_lock().
+- 5899줄에서 주소 0에 대한 vm_map_lookup_entry()를 호출하여 vme2a를 반환하도록 보장합니다.
+- 6048줄의 vm_map_clip_end(). 이 클립은 vme2a를 [0:D)]에서 [0:1P)]로 업데이트하고, [1P:D)]로 vme2b를 할당하여 VM 맵에 삽입합니다. 다행히도 vm_map_store_entry_link_rb()는 vme2b->vme_start가 기존 VME의 VA 범위를 벗어난 1P이므로 VMSEL: INSERT FAILED 패닉을 트리거하지 않도록 보장할 수 있습니다. 따라서 재밸런싱 발생 여부와 관계없이 vme2b는 항상 빨간색-검정색 트리의 두 번째로 왼쪽에 있는 노드로 삽입됩니다.
+- 6141줄의 pmap_protect_options()에서 [0:1P)에 대해 VM_PROT_NONE을 사용하면 아무 작업도 수행하지 않습니다.
+- 6159줄의 vm_map_unlock().
+
+3. 2A 하위 단계로 돌아가서 vm_map_copyin_internal()은 다음을 수행합니다:
+
+- 11852줄의 vm_map_lock().
+- 11853줄의 타임스탬프 확인은 스피너 스레드가 맵 잠금을 가져갔기 때문에 실패합니다.
+- 11854줄의 주소 0에 대한 vm_map_lookup_entry()는 vme2a를 반환하도록 보장됩니다.
+- 11868줄의 보호 검사에 실패한 이유는 vme2a에 더 이상 VM_PROT_READ가 없기 때문입니다.
+- 11710줄의 vm_map_unlock(), RETURN(KERN_PROTECTION_FAILURE)의 일부로.
+
+계속하기 전에 4개의 스피너 스레드 중 하나가 항상 맵 잠금을 가져간 후 vm_map_copyin_internal()이 다시 가져간다고 가정했다는 점에 유의해야 합니다. 이 익스플로잇을 수없이 실행했음에도 불구하고 그 경쟁에서 진 적이 없습니다. 만약 그런 일이 발생하면 스피너 스레드 수를 늘리면 됩니다. 궁극적으로, 극히 일부의 시간 동안 피할 수 없는 상황이라면 100% 확신할 수는 없지만 치명적이지 않을 것이라고 생각합니다. 스피너 스레드 없이 자체적으로 취약점을 트리거하면 구역 소진 패닉이 발생하기 때문에 레이스에서 몇 번 지는 것이 치명적이지 않다는 것을 알고 있습니다. 예를 들어, 레이스에서 한 번 패배하면 vme2a가 [0:0)으로 클리핑되고 그 뒤에 VA 범위가 [0:D)인 새 VME가 삽입됩니다. 실제로는 [0:0) VME가 추가됩니다. 제가 생각하지 못한 다른 부작용이 있을 수 있지만 이론적으로는 여전히 패치할 수 있습니다. 마지막으로, 스피너 스레드는 vme2a의 보호가 VM_PROT_WRITE로 성공적으로 업데이트된 후에도 짧은 기간 동안 바쁨 루프에서 vm_-protect()를 계속 호출할 수 있지만 그 시점에서는 결정적으로 아무것도 하지 않는다는 점에 유의해야 합니다. 다시 자세한 코드로 돌아가서...
+
+4. 3단계에서 vm_copy()는 vm_map_copyin()을 호출하고, vm_map_copyin_common()은 마지막으로 vm_map_copyin_internal()을 호출하여 다음을 수행합니다:
+
+- 11733줄의 vm_map_lock().
+- 11740줄의 주소 D에 대한 vm_map_lookup_entry()를 호출하여 vme3를 반환하도록 보장합니다.
+- 11989 줄의 vm_map_unlock().
+- 12040줄의 vm_object_copy_strategically()는 vm_object_copy_slowly()를 호출하여 차례로 vmo2를 할당하고 vmo0의 페이지를 여기에 복사합니다.
+- 12125 줄의 vm_map_lock().
+- vme3의 크기가 복사 크기와 같기 때문에 동안 루프에서 벗어납니다.
+- 12330줄의 vm_map_simplify_range()는 주소 D를 다시 조회합니다. 맵은 마지막 조회 이후 변경되지 않았으므로 vme3를 다시 반환합니다. 단순화된 것은 없습니다.
+- 12336줄의 vm_map_unlock().
+
+5. 여전히 3단계에서 vm_copy()는 vm_map_copy_overwrite()를 호출하여 다음을 수행합니다:
+
+- 9905줄의 vm_map_lock_read().
+- 9906줄의 주소 B에 대한 vm_map_lookup_entry()를 호출하여 vme1을 반환하도록 보장합니다.
+- 9919 줄의 vm_map_unlock_read().
+- 10017줄의 vm_map_copy_overwrite_nested()는 다음을 수행합니다:
+- 9236 줄의 vm_map_lock().
+- 9248줄의 주소 B에 대한 vm_map_lookup_entry(). 마지막 조회 이후 지도가 변경되지 않았으므로 vme1을 다시 반환합니다.
+- 9693줄의 vm_map_copy_overwrite_aligned()는 다음을 수행합니다:
+- VME_OBJECT(vme1)가 vmo2로 설정되고 VME_OFFSET(vme1)이 0으로 설정됩니다.
+- VME_OBJECT(vme2)는 vmo2로 설정되고 VME_OFFSET(vme2)는 XP로 설정됩니다.
+- 9707줄의 vm_map_unlock().
+
+6. 여전히 3단계에서 memset()을 사용하여 X 페이지에서 오류가 발생하여 다음을 수행하는 vm_fault_internal()을 트리거합니다:
+
+- 4177줄의 vm_map_lock_read()(vm_fault.c).
+- 4192줄(vm_fault.c)의 vm_map_lookup_and_lock_object()는 다음을 수행합니다:
+    - 13548줄의 맵-> 힌트 확인이 실패한 이유는 설정 중 1단계에서 마지막으로 할당했던 VME인 vme4로 설정되어 있었고 지금까지 수행한 작업 중 힌트를 수정한 작업이 없었기 때문입니다.
+    - 13555줄의 주소 B에 대한 vm_map_lookup_entry(). 마지막 조회 이후 지도가 변경되지 않았으므로 vme1을 다시 반환합니다. 이 전체 글머리 기호는 [B:C) VA 범위의 각 페이지에 대해 X회 반복되지만 조회는 항상 vme1을 반환한다는 점에 유의하세요.
+    - vmo2는 해당 오프셋과 함께 잠긴 상태로 반환됩니다.
+- 위에서 반환된 객체 및 오프셋에 대해 4391줄(vm_fault.c)의 vm_page_lookup()을 참조하세요. 마지막으로 반환된 페이지는 vm_fault_enter()로 매핑된 다음 vm_fault_complete()가 최종적으로 vm_map_unlock_read()를 호출합니다.
+
+7. 4단계에서는 vm_-protect()가 vm_map_protect()를 호출하여 다음을 수행합니다:
+- 5883 줄의 vm_map_lock().
+- 5899줄의 주소 B에 대한 vm_map_lookup_entry(). 마지막 조회 이후 지도가 변경되지 않았으므로 vme1을 다시 반환합니다.
+- 6141줄의 [0:1P]에 대한 pmap_protect_options()에서 VM_PROT_READ를 사용하여 아무 작업도 수행하지 않습니다.
+- 6155줄의 vm_map_simplify_entry()가 두 번 성공적으로 호출됩니다:
+    - 첫 번째에는 vme1이 VM 맵에서 제거되며, 주소 B에 대한 조회가 vme1을 반환하도록 보장되는 것과 같은 이유로 NO ENTRY TO DELETE 패닉이 트리거되지 않도록 보장됩니다. 또한 vme2는 [C:0)]에서 [B:0)]로 업데이트되고 맵->hint는 vme2로 설정됩니다. 여기서 구멍 목록은 파트 C에서 설명한 대로 손상됩니다.
+    - 두 번째로 vme2a는 VM 맵에서 제거되며, 주소 0에 대한 조회가 vme2a를 반환하도록 보장되는 것과 같은 이유로 NO ENTRY TO DELETE 패닉이 트리거되지 않도록 보장됩니다. 또한 vme2b는 [1P:D)]에서 [0:D)]로 업데이트되고 맵->hint는 vme2b로 설정됩니다. 이에 대해서는 나중에 자세히 설명합니다!
+- 6159줄의 vm_map_unlock().
+
+5단계는 코드 경로 측면에서 3단계와 거의 동일하다는 점에 유의하세요.
+
+8. 5단계에서 vm_copy()는 vm_map_copyin()을 호출하고, vm_map_copyin_common()은 마지막으로 vm_map_copyin_internal()을 호출하여 다음을 수행합니다:
+
+- 11733줄의 vm_map_lock().
+- 11740줄의 주소 E에 대한 vm_map_lookup_entry()를 호출하여 vme4를 반환하도록 보장합니다.
+- 11989 줄의 vm_map_unlock().
+- 12040줄의 vm_object_copy_strategically()는 vm_object_copy_slowly()를 호출하여 차례로 vmo3를 할당하고 vmo1의 페이지를 여기에 복사합니다.
+- 12125 줄의 vm_map_lock().
+- vme4의 크기가 복사 크기와 같으므로 동안 루프에서 벗어납니다.
+- 12330줄의 vm_map_simplify_range()는 주소 E를 다시 조회합니다. 맵은 마지막 조회 이후 변경되지 않았으므로 vme4를 다시 반환합니다. 단순화된 것은 없습니다.
+- 12336줄의 vm_map_unlock().
+
+9. 여전히 5단계에서 vm_copy()는 vm_map_copy_overwrite()를 호출하여 다음을 수행합니다:
+
+- 9905줄의 vm_map_lock_read().
+- 9906줄에서 주소 A에 대한 vm_map_lookup_entry()를 호출하여 vme0을 반환하도록 보장합니다.
+- 9919 줄의 vm_map_unlock_read().
+- 10017줄의 vm_map_copy_overwrite_nested()는 다음을 수행합니다:
+    - 9236 줄의 vm_map_lock().
+    - 9248줄의 주소 A에 대한 vm_map_lookup_entry(). 마지막 조회 이후 지도가 변경되지 않았으므로 vme0을 다시 반환합니다.
+    - 9693줄의 vm_map_copy_overwrite_aligned()는 다음을 수행합니다:
+        - VME_OBJECT(vme0)가 vmo3로 설정되고 VME_OFFSET(vme0)이 0으로 설정됩니다.
+        - 다른 오브젝트 할당(즉, vmo2)이 있기 때문에 10591줄의 pmap_remove_options()에서 vme2의 VA 범위에 대해. 그러나 vme2의 VA 범위는 [B:0)이므로 끝 주소가 시작 주소보다 작기 때문에 아무 효과가 없습니다.
+        - 10597줄의 vm_object_deallocate()는 vmo2의 마지막 참조를 해제하여 오브젝트를 회수합니다.
+        - VME_OBJECT(vme2)는 vmo3로 설정되고 VME_OFFSET(vme2)는 1P로 설정됩니다.
+- 9707줄의 vm_map_unlock().
+
+그리고 짜잔! 이것이 PUAF 익스플로잇의 전체 코드 경로이며, 위에서 정의한 대로 제어된 컨텍스트에서 결정론적이어야 합니다. 한 가지 중요한 관찰 사항은 map->hint가 해당 시점에 VA 범위가 [0:D)인 vme2b로 설정되어 있다는 것입니다. 5개의 VME가 map->max_offset에 할당되었으므로 이는 본질적으로 프로세스의 전체 가상 주소 공간을 커버한다는 것을 의미합니다. 따라서 4단계 이후에는 코드나 데이터에 오류가 발생하면 의도한 VME가 아닌 vm_map_lookup_and_lock_object()의 vme2b에 도달하게 되므로 치명적일 가능성이 큽니다. 즉, 중요한 섹션에서 실행되는 코드가 오류를 피하기 위해 신중하게 작성되었다면(물론 3단계의 명시적 memset()은 제외) 문제가 되지 않을 것입니다. 그러나 부록 A에 설명된 대로 5단계 이후에 VM_FLAGS_ANYWHERE 플래그를 사용하여 작은 VME를 vm_allocate()하면 이 새 VME를 가리키도록 map->hint가 업데이트될 수 있습니다. 그러나 이 방법이 만병통치약은 아닙니다. 상대적으로 낮은 주소에서 오류가 발생하는 경우 빨간색-검정색 트리에서 의도한 VME보다 위에 있는 vme2b가 동일한 문제를 일으킬 수 있습니다. 물론 오류 주소가 높을수록 이러한 가능성은 줄어듭니다. 요약하면, 목표 컨텍스트에서 가능하면 중요 구간에서는 불필요한 VM 관련 작업을 모두 피해야 합니다.
+
+참고: 수행 중인 작업을 정확히 알고 있고 안전하다는 것을 확인한 경우 특정 VM 관련 작업을 수행해도 괜찮습니다. 예를 들어, PUAF 프리미티브를 달성한 후 PUAF 페이지 중 하나에 도달할 때까지 무료 목록에서 페이지를 가져옵니다. 이를 안전하게 수행하기 위해 2개의 버퍼를 미리 할당할 수 있으며, 소스 버퍼는 쓰기 시 최적화를 비활성화하기 위해 VM_FLAGS_PURGABLE 플래그로 할당되어 있습니다. 그런 다음 vm_copy()를 호출하여 소스 버퍼에서 대상 버퍼로 페이지를 복사하기만 하면 됩니다. 소스 오브젝트의 복사 전략이 MEMORY_OBJECT_COPY_NONE이므로 vm_object_copy_slowly() 중에 새 페이지가 여유 목록에서 가져옵니다. 조회 중에 2개의 버퍼 주소가 vme2b에 부딪힐 위험이 없는지 확인하기만 하면 되는데, 이는 위에서 설명한 대로 쉽게 할 수 있습니다.
