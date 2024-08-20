@@ -298,7 +298,7 @@ slow_copy:
 
 한편, 스피너 스레드로 돌아가면 vm_fault_wire()는 계속해서 dst_vmo_3의 X 페이지를 와이어링하여 읽기 및 쓰기 권한이 모두 있는 해당 페이지의 물리적 주소로 dst_vme_3의 VA 범위 내 PTE에 다시 입력합니다. 그 후 vm_map_wire_nested()가 완료되고 mlock()이 0을 반환합니다. 다음은 2단계의 마지막 하위 단계인 하위 단계 2D 이후의 관련 커널 상태를 보여주는 그림입니다:
 
-![landa-figure6.png](/writeups//figures/landa-figure6.png)
+![landa-figure6.png](/writeups/figures/landa-figure6.png)
 
 약속한 대로 이제 다양한 경합 조건의 가능한 결과에 대해 설명하겠습니다. 두 번째 반복 중에 vm_map_copy_overwrite_aligned()가 vm_fault_copy()를 호출하기 전에 맵 잠금을 해제하는 시점까지는 익스플로잇이 완전히 결정론적이라는 점에 유의하시기 바랍니다. 이제 세 가지 시나리오를 고려해 보겠습니다:
 
@@ -308,7 +308,13 @@ slow_copy:
 
 물론 또 다른 가능한 시나리오가 있습니다. 어느 시점에서 메인 스레드는 vm_fault_copy()를 실행하느라 바쁘고 스피너 스레드는 vm_fault_wire()를 실행하느라 바쁘고 둘 다 맵 잠금을 보유하지 않는 경우입니다. 이 경우 vm_fault_wire()가 dst_vme_3의 VA 범위 시작 부분에 특정 수의 PTE를 배선한 다음 vm_fault_copy()가 반환하고 vm_map_copy_overwrite_aligned()가 dst_vme_3에 대해 pmap_remove_options()를 호출하면 모든 PTE를 제거할 수 있습니다. 즉, 그 후에는 vm_fault_wire()가 dst_vm_o_3의 나머지 페이지를 계속 배선할 수 있으며, 그러면 해당 VA 범위의 나머지 PTE가 다시 입력됩니다. 결국, X 페이지의 일부에 PUAF 프리미티브가 남게 됩니다. 그리고 이런 일이 가끔 발생합니다! X를 2048로 설정했을 때 테스트한 결과, 익스플로잇은 대부분의 경우 2048페이지 모두에서 PUAF 프리미티브를 획득합니다. 그러나 때때로 테스트 결과 dst_vme_3 범위의 첫 번째 PTE가 클리어되어 익스플로잇이 2047 페이지에서 PUAF 프리미티브를 획득하는 것으로 나타났습니다. 이것이 현재 익스플로잇의 상태에서 제가 관찰한 유일한 두 가지 결과입니다. 과거에는 몇 가지를 조정하기 전에는 최대 4개의 PTE가 클리어되는 것을 본 적이 있습니다. 어쨌든, 이 PUAF 익스플로잇은 안전하기 때문에 처음에 PUAF 프리미티브에서 KRKW 프리미티브를 얻지 못하면 반복할 수 있습니다.
 
+### Step 3:
+이 단계는 단순히 dst_vmo_3에 대한 유일한 참조가 남아 있는 dst_vme_4의 할당을 해제합니다. 따라서 이렇게 하면 dst_vm_o_3에 대한 vm_object_reap()이 트리거되어 pmap_disconnect()를 호출하지 않고도 모든 페이지를 여유 목록에 다시 넣을 수 있습니다. 즉, dst_vme_3의 VA 범위에 있는 PTE는 여전히 읽기 및 쓰기 권한이 모두 있는 해당 페이지 중 (최대) X개를 가리킵니다. 다음은 3단계 이후의 관련 커널 상태를 보여주는 그림입니다:
+
+![landa-figure7.png](/writeupsfigures/landa-figure7.png)
+
 ## Part B: From PUAF to KRKW
+이 익스플로잇의 부분은 모든 PUAF 익스플로잇에서 공유되므로 자세한 내용은 PUAF 익스플로잇에 대한 글을 참조하세요.
 
 ## Part C: From KRKW to Cleanup
-
+이 익스플로잇은 커널 패닉을 방지하기 위해 커널을 정리해야 할 정도로 커널 상태를 손상시키지 않습니다.
