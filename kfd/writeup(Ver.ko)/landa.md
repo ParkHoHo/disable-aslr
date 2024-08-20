@@ -311,7 +311,7 @@ slow_copy:
 ### Step 3:
 이 단계는 단순히 dst_vmo_3에 대한 유일한 참조가 남아 있는 dst_vme_4의 할당을 해제합니다. 따라서 이렇게 하면 dst_vm_o_3에 대한 vm_object_reap()이 트리거되어 pmap_disconnect()를 호출하지 않고도 모든 페이지를 여유 목록에 다시 넣을 수 있습니다. 즉, dst_vme_3의 VA 범위에 있는 PTE는 여전히 읽기 및 쓰기 권한이 모두 있는 해당 페이지 중 (최대) X개를 가리킵니다. 다음은 3단계 이후의 관련 커널 상태를 보여주는 그림입니다:
 
-![landa-figure7.png](/writeupsfigures/landa-figure7.png)
+![landa-figure7.png](/writeups/figures/landa-figure7.png)
 
 ## Part B: From PUAF to KRKW
 이 익스플로잇의 부분은 모든 PUAF 익스플로잇에서 공유되므로 자세한 내용은 PUAF 익스플로잇에 대한 글을 참조하세요.
