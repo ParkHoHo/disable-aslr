@@ -6,6 +6,13 @@
 //
 
 #include <stdio.h>
+#include <sys/_types/_pid_t.h>
+#include <sys/_types/_uid_t.h>
+#include <sys/_types/_gid_t.h>
+#include <sys/_types/_mode_t.h>
+#include <_types/_uint64_t.h>
+#include <_types/_uint32_t.h>
+
 
 //https://github.com/apple-oss-distributions/xnu/blob/xnu-8792.41.9/bsd/sys/mount.h#L293
 #define MNT_RDONLY      0x00000001      /* read only filesystem */
